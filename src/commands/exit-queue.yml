@@ -1,0 +1,73 @@
+description: Exit the queue when a workflow is finished
+parameters:
+  lock_key_env_var_name:
+    description: |
+      Environment variable containing the key of the workflow lock to release. This
+      should generally be set in a Context.
+    type: env_var_name
+    default: WORKFLOW_LOCK_KEY
+  exit_condition:
+    description: Only release the lock under a certain condition
+    type: enum
+    enum:
+      - on_success
+      - on_fail
+      - on_cancelled  # This requires that you manually set WORKFLOW_LOCK_BUILD_STATUS=CANCELLED *before* the cancel-job command
+      - always
+    default: always
+steps:
+  - attach_workspace:
+      at: /tmp/workspace
+  - run:
+      name: Set failure condition
+      when: on_fail
+      command: |
+        if [[ -z "$WORKFLOW_LOCK_BUILD_STATUS" ]]; then
+          echo 'export WORKFLOW_LOCK_BUILD_STATUS=FAILED' >> $BASH_ENV
+        fi
+  - run:
+      name: Set success condition
+      when: on_success
+      command: |
+        if [[ -z "$WORKFLOW_LOCK_BUILD_STATUS" ]]; then
+          echo 'export WORKFLOW_LOCK_BUILD_STATUS=SUCCESS' >> $BASH_ENV
+        fi
+  - run:
+      name: Exit the workflow queue
+      when: always
+      command: |
+        LOCK_KEY="${<< parameters.lock_key_env_var_name >>}"
+        if [[ -z "$LOCK_KEY" ]]; then
+          echo "No lock key set. Continuing..."
+          exit 0
+        fi
+
+        <<# parameters.exit_condition >>
+        if [[ \
+          ("<< parameters.exit_condition >>" == "on_fail" \
+            && "$WORKFLOW_LOCK_BUILD_STATUS" != "FAILED") \
+          || ("<< parameters.exit_condition >>" == "on_success" \
+            && "$WORKFLOW_LOCK_BUILD_STATUS" != "SUCCESS") \
+          || ("<< parameters.exit_condition >>" == "on_cancelled" \
+            && "$WORKFLOW_LOCK_BUILD_STATUS" != "CANCELLED") \
+        ]]; then
+          echo "Release condition is << parameters.exit_condition >> but status is ${WORKFLOW_LOCK_BUILD_STATUS}. Will not release lock for key ${LOCK_KEY}."
+          exit 0
+        fi
+        <</ parameters.exit_condition >>
+
+        # Update the status of the workflow and return the updated item
+        # The key object is stored in /tmp/workspace/workflow-key.json
+        VALUES="$(
+          echo '{}' \
+            | jq --arg s "$WORKFLOW_LOCK_BUILD_STATUS" '.[":status"].S = $s' - \
+            | jq --arg t "$(date +%s)" '.[":released_at"].N = $t' -)"
+        aws dynamodb update-item \
+          --table-name "$DYNAMODB_TABLE_WORKFLOWS" \
+          --key "file:///tmp/workspace/workflow-key.json" \
+          --update-expression 'SET #status = :status, #released_at = :released_at' \
+          --expression-attribute-names '{"#status": "status", "#released_at": "released_at"}' \
+          --expression-attribute-values "$VALUES" \
+          --return-values ALL_NEW
+
+        echo "Successfully released lock for $LOCK_KEY"

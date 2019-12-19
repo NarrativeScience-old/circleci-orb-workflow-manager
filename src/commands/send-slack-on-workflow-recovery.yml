@@ -1,0 +1,39 @@
+description: Send a Slack message to a channel if the workflow has recovered
+steps:
+  - run:
+      name: Check if the workflow has recovered
+      command: |
+        values="$(
+          echo '{":key": {"S": ""}, ":success": {"S": "SUCCESS"}, ":failed": {"S": "FAILED"}}' \
+          | jq --arg k "$WORKFLOW_LOCK_KEY" '.[":key"].S = $k' -)"
+
+        # Retrieves the statuses for the last two workflows with statuses
+        # of either `SUCCESS` or `FAILURE`. The most recent value should be the
+        # status of the current workflow after it has exited the queue
+        # and updated its status on the corresponding dynamodb table.
+        deploys="$(aws dynamodb query \
+          --table-name "$DYNAMODB_TABLE_WORKFLOWS" \
+          --key-condition-expression '#key = :key' \
+          --select "SPECIFIC_ATTRIBUTES" \
+          --projection-expression "#status" \
+          --filter-expression '#status IN (:success, :failed)' \
+          --expression-attribute-names '{"#key": "key", "#status": "status"}' \
+          --expression-attribute-values "$values" \
+          --max-items 2 \
+          --no-scan-index-forward | jq -r .Items)"
+
+        current_deploy="$(echo "$deploys" | jq -r .[0].status.S)"
+        prev_deploy="$(echo "$deploys" | jq -r .[1].status.S)"
+
+        if [[ "$current_deploy" == "SUCCESS" && "$prev_deploy" == "FAILED" ]]; then
+          :  # Noop to continue to next step to notify Slack
+        else
+          # Halt the job and mark it as successful
+          circleci step halt
+        fi
+  - slack/notify:
+      include_project_field: false
+      include_job_number_field: false
+      include_visit_job_action: false
+      message: ":tada: $WORKFLOW_LOCK_KEY has recovered!"
+      color: "#1CBF43"

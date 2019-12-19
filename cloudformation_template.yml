@@ -1,0 +1,66 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: CircleCI infrastructure for the Workflow Manager
+
+Parameters:
+  WorkflowsTableNameComponent:
+    Description: >
+      Workflows table name suffix used for backing up the table during certain deploys
+    Type: String
+    Default: workflows
+
+Outputs:
+  WorkflowsTableName:
+    Description: Name of the DynamoDB table containing workflow items
+    Value: !Ref WorkflowsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-table-name-${WorkflowsTableNameComponent}"
+
+Resources:
+  WorkflowsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      KeySchema:
+        - AttributeName: key
+          KeyType: HASH
+        - AttributeName: committed_at
+          KeyType: RANGE
+      AttributeDefinitions:
+        - AttributeName: key
+          AttributeType: S
+        - AttributeName: committed_at
+          AttributeType: N
+        - AttributeName: workflow_id
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+        - AttributeName: commit
+          AttributeType: S
+      GlobalSecondaryIndexes:
+        - IndexName: workflow_id
+          KeySchema:
+            - AttributeName: key
+              KeyType: HASH
+            - AttributeName: workflow_id
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: status
+          KeySchema:
+            - AttributeName: key
+              KeyType: HASH
+            - AttributeName: status
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: commit
+          KeySchema:
+            - AttributeName: key
+              KeyType: HASH
+            - AttributeName: commit
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      BillingMode: PAY_PER_REQUEST
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true

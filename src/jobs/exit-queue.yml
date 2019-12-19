@@ -1,0 +1,15 @@
+description: Exit the queue when a workflow is finished
+parameters:
+  send_slack_on_recovery:
+    description: If true, the default channel will be notified on workflow recovery
+    type: boolean
+    default: false
+machine:
+  enabled: true
+steps:
+  - aws-cli/install
+  - exit-queue
+  - when:
+      condition: << parameters.send_slack_on_recovery >>
+      steps:
+        - send-slack-on-workflow-recovery

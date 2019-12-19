@@ -1,0 +1,59 @@
+description: Wait in a workflow queue until the job is at the front
+parameters:
+  lock_key_env_var_name:
+    description: |
+      Environment variable containing the key of the workflow lock
+      to acquire. This should generally be set in a Context.
+    type: env_var_name
+    default: WORKFLOW_LOCK_KEY
+  wait_for:
+    description: How long to wait before giving up (in minutes)
+    type: integer
+    default: 240
+  ttl:
+    description: |
+      TTL of the workflow item in the store specified as a date string.
+      See http://man7.org/linux/man-pages/man1/date.1.html#DATE_STRING for the format
+      and https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/howitworks-ttl.html
+      for how DynamoDB manages TTL.
+    type: string
+    default: "7 days"
+  poll_interval:
+    description: Polling interval between attempts to continue the workflow (in seconds)
+    type: integer
+    default: 10
+  check_previous_commit:
+    description: |
+      Whether to check if the previous commit has been added to the queue before
+      continuing with the workflow. This helps deal with the race condition of two
+      commits getting merged seconds apart.
+    type: boolean
+    default: false
+  force:
+    description: |
+      Whether to continue on with the workflow regardless of if another workflow is
+      running
+    type: boolean
+    default: false
+  do_not_cancel_workflow_if_tag_in_commit:
+    description: |
+      Do not allow this workflow to self-cancel, even if it could have been ignored, if
+      the provided tag is in the commit message (case-insensitive)
+    type: string
+    default: ""
+docker:
+  - image: circleci/python:3.6.8
+steps:
+  - checkout
+  - aws-cli/install
+  - wait-in-queue:
+      lock_key_env_var_name: << parameters.lock_key_env_var_name >>
+      wait_for: << parameters.wait_for >>
+      ttl: << parameters.ttl >>
+      poll_interval: << parameters.poll_interval >>
+      check_previous_commit: << parameters.check_previous_commit >>
+      force: << parameters.force >>
+      do_not_cancel_workflow_if_tag_in_commit: << parameters.do_not_cancel_workflow_if_tag_in_commit >>
+  - exit-queue:
+      exit_condition: on_cancelled
+  - cancel-job

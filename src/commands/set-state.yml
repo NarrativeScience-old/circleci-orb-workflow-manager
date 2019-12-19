@@ -1,0 +1,43 @@
+description: Set state data to the remote store
+parameters:
+  key:
+    description: Key to set in the state
+    type: string
+  value_var_name:
+    description: Environment variable to source the value
+    type: env_var_name
+  value_type:
+    description: |
+      DynamoDB data type. See https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_AttributeValue.html.
+      Only a few are currently supported in this command.
+    type: enum
+    default: S
+    enum: ["S", "N", "BOOL", "NULL"]
+steps:
+  - run:
+      name: Set state data to the store (<< parameters.key >>)
+      command: |
+        # If the value type is S (string) or N (number) then wrap the value in quotes
+        # to feed to --argjson. Otherwise, we'll get a `Invalid type for parameter`
+        # error.
+        VALUE="${<< parameters.value_var_name >>}"
+        if [[ "<< parameters.value_type >>" == "S" || "<< parameters.value_type >>" == "N" ]]; then
+          VALUE="\"$VALUE\""
+        fi
+
+        # Create a temporary file containing expression attribute values (JSON)
+        VALUES="$(mktemp)"
+        echo '{}' \
+          | jq --argjson v "$VALUE" '.[":value"]["<< parameters.value_type >>"] = $v' - \
+          > "$VALUES"
+        cat "$VALUES"
+
+        # Update the state item and return the updated item
+        # The key object is stored in /tmp/workspace/workflow-key.json
+        aws dynamodb update-item \
+          --table-name "$DYNAMODB_TABLE_WORKFLOWS" \
+          --key "file:///tmp/workspace/workflow-key.json" \
+          --update-expression 'SET #state.#key = :value' \
+          --expression-attribute-names '{"#state": "state", "#key": "<< parameters.key >>"}' \
+          --expression-attribute-values "file://$VALUES" \
+          --return-values ALL_NEW

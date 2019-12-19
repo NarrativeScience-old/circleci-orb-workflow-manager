@@ -1,0 +1,37 @@
+description: Download state data to a local file and inject values into the environment
+parameters:
+  path:
+    description: Path to store the state file
+    type: string
+    default: /tmp/state.json
+steps:
+  - attach_workspace:
+      at: /tmp/workspace
+  - run:
+      name: Download state data to a local file
+      command: |
+        WORKFLOW_KEY_FILE=/tmp/workspace/workflow-key.json
+        if [[ ! -f "$WORKFLOW_KEY_FILE" ]]; then
+          echo "Workflow key file does not exist at ${WORKFLOW_KEY_FILE}. Skipping the initialization of the local state store..."
+          exit 0
+        fi
+
+        # Get the state item
+        ITEM="$(
+          aws dynamodb get-item \
+            --table-name "$DYNAMODB_TABLE_WORKFLOWS" \
+            --key "file://${WORKFLOW_KEY_FILE}" \
+            --consistent-read)"
+
+        # If the item doesn't exist, default to an empty item
+        [[ -z "$ITEM" ]] && ITEM='{"Item": {}}'
+
+        # Transform the state into a flat object and store on disk
+        echo "$ITEM" | jq '.Item.state.M | map_values(values[])' - > "<< parameters.path >>"
+
+        # Load the state values into the environment
+        cat "<< parameters.path >>" \
+          | jq -r 'to_entries | map("export \(.key)=\(.value | @sh)") | join("\n")' - \
+          >> $BASH_ENV
+
+        cat "<< parameters.path >>"

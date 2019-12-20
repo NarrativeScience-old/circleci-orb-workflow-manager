@@ -1,6 +1,16 @@
 # CircleCI Orb: Workflow Manager
 
-Manage workflow concurrency and job state using an external store.
+[View in CircleCI Orb Registry](https://circleci.com/orbs/registry/orb/narrativescience/workflow-manager)
+
+Manage workflow concurrency and job state using an external store. 
+
+This orb allows you to:
+
+- Limit the number of concurrently running workflows. This is useful when you want to only deploy one batch of changes at a time or use AWS CloudFormation and need to wait for the previous deploy to finish.
+- Squash commits that are deployed in a workflow when the workflow is allowed to proceed
+- Store and retreive data from a key-value store in jobs, even if they're run in parallel
+- Track the status of a workflow from the command line
+- Send a Slack message when a workflow succeeds after failing
 
 ## Rationale
 
@@ -8,16 +18,17 @@ Even though we tested it in different jobs, the [queue orb](https://circleci.com
 
 Instead of using the CircleCI API to determine if the workflow can continue, we can use a remote key-value store (DynamoDB) that acts as a first-in-first-out (FIFO) queue. This will allow us to process deploys one at a time, in the order the commits were merged.
 
-## Supporting Infrastructure
+## Installation
 
 ### Requirements
 
 - Install the [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html)
+- Install [jq](https://stedolan.github.io/jq/download/)
 - Set your AWS user profile or `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_DEFAULT_REGION` in your shell
 
-### How to deploy
+### Deploying the Stack
 
-Deploy the [CloudFormation stack](./cloudformation_template.yml) with infrastructure to support this orb using the AWS CLI:
+This orb uses a DynamoDB table to store state. Deploy the [CloudFormation stack](./cloudformation_template.yml) with infrastructure to support this orb using the AWS CLI:
 
 ```bash
 aws cloudformation deploy \
@@ -27,9 +38,9 @@ aws cloudformation deploy \
 
 This will create a DynamoDB table. You can tweak that template to align with your organization's standards or use the AWS console instead.
 
-### Permissions
+### IAM Permissions
 
-You need to allow your CircleCI AWS user to interact with the DynamoDB table. Create a managed or inline policy and attach it to the IAM user:
+You need to allow your CircleCI AWS IAM user to interact with the DynamoDB table. Create a managed or inline policy and attach it to the IAM user:
 
 ```json
 {
@@ -52,11 +63,28 @@ You need to allow your CircleCI AWS user to interact with the DynamoDB table. Cr
 }
 ```
 
-### Deploy Queue
+### CircleCI Context
 
-#### Entering the Queue
+For each workflow that uses this `workflow-manager` orb, create a [CircleCI Context](https://circleci.com/docs/2.0/contexts/) with an environment variable named `WORKFLOW_LOCK_KEY` set to the name of a workflow. Then, set `context: my-new-context` for every job in the workflow.
 
-We run the [`wait-in-queue` job](src/jobs/wait-in-queue.yml) first in the deploy workflow. It starts by adding an item to the table with some attributes pertaining to the workflow instance:
+## Usage
+
+### Entering the Queue: `wait-in-queue`
+
+We run the [`wait-in-queue` job](src/jobs/wait-in-queue.yml) first in the deploy workflow. For example:
+
+```yaml
+jobs:
+    - workflow-manager/wait-in-queue:
+        context: my-deploy
+        filters:
+            branches:
+            only: master
+        check_previous_commit: true
+        do_not_cancel_workflow_if_tag_in_commit: "[force deploy]"
+```
+
+It starts by adding an item to the table with some attributes pertaining to the workflow instance:
 
 Field | Type | Description
 --- | --- | ---
@@ -72,9 +100,22 @@ status | string | Localized secondary index. One of `QUEUED`, `RUNNING`, `SUCCES
 
 The job then starts polling the table for the oldest item that doesn't have a status attribute of `SUCCESS` or `FAILED`. If that item has the same `workflow_id` as the job, that means the job is at the "front" of the queue and can continue; we set the item's status to `RUNNING` and the workflow transitions to the next job. It will wait in the queue for up to 4 hours before failing. When the workflow is allowed to continue, it can be said to have a "lock" on the deploy.
 
-#### Exiting the Queue
+### Exiting the Queue: `exit-queue`
 
-The [`exit-queue` job](src/jobs/exit-queue.yml) updates the table item's status attribute to be `SUCCESS` or `FAILED` depending on the value of the `exit_condition` parameter. By updating the job status, it allows other workflows to continue. This job should be called as the last job of every "branch" in a given workflow. For our deploy workflow this means putting it in 3 or 4 places.
+The [`exit-queue` job](src/jobs/exit-queue.yml) updates the table item's status attribute to be `SUCCESS` or `FAILED` depending on the value of the `exit_condition` parameter. By updating the job status, it allows other workflows to continue. This job should be called as the last job of every "branch" in a given workflow. For example:
+
+```yaml
+jobs:
+    # ...
+    - workflow-manager/exit-queue:
+        context: my-deploy
+        requires:
+            - deploy-stack
+        filters:
+        branches:
+            only: master
+        send_slack_on_recovery: true
+```
 
 Even if we add the `exit-queue` job in all the right places in the workflow, we can still get into a state in which the lock is not released when a job fails. CircleCI does not have support for "run a job if some other job failed" so we have to add boilerplate to do so. This takes the form of adding the following step at the bottom of every job that the deploy workflow uses:
 
@@ -87,7 +128,7 @@ The `exit-queue` command will then release the lock only if a previous step in t
 
 Instead of passing a lock key parameter down through the job/command parameter stack, we can instead leverage a [CircleCI Context](https://circleci.com/docs/2.0/contexts/) that sets an environment variable called `WORKFLOW_LOCK_KEY`. If all jobs in the  workflow include the `context: <context name>` parameter, all commands will have access to that environment variable. The lock-related commands can source that variable to set the lock key.
 
-#### Squashing Commits
+### Squashing Commits
 
 The deploy worklow has the capability to "squash commits", which replicates a feature of Jenkins that didn't come for free in CircleCI.
 
@@ -99,18 +140,9 @@ __What if I don't want my commit squashed?__ If you don't want this behavior for
 
 __Note:__ As of now, if there's a failure in the deploy workflow, the Slack message sent to the channel will only include the author of that commit, i.e. it won't contain the list of authors of commits that were squashed. We can see how it plays out before deciding if this behavior should be added.
 
-## Workflows CLI
+### Workflows CLI
 
 The `./workflows-cli.sh` script is a CLI for working with CircleCI workflows. It's mostly a wrapper on top of the `aws` CLI and primarily queries the workflows table in DynamoDB (see: [Deploy Queue](#deploy-queue)).
-
-### Installation
-
-Requirements:
-
-- Install the [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html)
-- Install [jq](https://stedolan.github.io/jq/download/)
-
-### Usage
 
 ```bash
 Usage:

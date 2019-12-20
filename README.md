@@ -1,4 +1,4 @@
-# CircleCI Orb: Workflow Manager
+# CircleCI Orb: Workflow Manager [![CircleCI Orb Version](https://img.shields.io/badge/endpoint.svg?url=https://badges.circleci.io/orb/narrativescience/workflow-manager)](https://circleci.com/orbs/registry/orb/narrativescience/workflow-manager) [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 
 [View in CircleCI Orb Registry](https://circleci.com/orbs/registry/orb/narrativescience/workflow-manager)
 

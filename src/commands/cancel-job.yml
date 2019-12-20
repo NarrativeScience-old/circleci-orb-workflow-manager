@@ -33,7 +33,7 @@ steps:
             # This means the job was cancelled but for some reason the current script is
             # still running. Wait a few seconds to let it catch up then fail the job to
             # prevent downstream jobs from running unintentionally.
-            sleep 10
+            sleep 60
             exit 1
           fi
 

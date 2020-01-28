@@ -18,6 +18,7 @@ parameters:
 steps:
   - attach_workspace:
       at: /tmp/workspace
+      when: always
   - run:
       name: Set failure condition
       when: on_fail

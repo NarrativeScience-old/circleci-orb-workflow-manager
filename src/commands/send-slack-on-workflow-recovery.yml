@@ -1,4 +1,12 @@
 description: Send a Slack message to a channel if the workflow has recovered
+parameters:
+  channel:
+    description: >
+      The channel to send the slack notification to. Defaults to empty string which is the web-hooks default channel.
+    type: string
+  message:
+    description: The message to send with the slack notification
+    type: string
 steps:
   - run:
       name: Check if the workflow has recovered
@@ -35,5 +43,6 @@ steps:
       include_project_field: false
       include_job_number_field: false
       include_visit_job_action: false
-      message: ":tada: $WORKFLOW_LOCK_KEY has recovered!"
+      channel: << parameters.channel >>
+      message: << parameters.message >>
       color: "#1CBF43"

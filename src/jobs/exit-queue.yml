@@ -4,6 +4,15 @@ parameters:
     description: If true, the default channel will be notified on workflow recovery
     type: boolean
     default: false
+  channel:
+    description: >
+      The channel to send the slack notification to. Defaults to empty string which is the web-hooks default channel.
+    type: string
+    default: ""
+  message:
+    description: The message to send with the slack notification
+    type: string
+    default: ":tada: $WORKFLOW_LOCK_KEY has recovered!"
 machine:
   enabled: true
 steps:
@@ -12,4 +21,7 @@ steps:
   - when:
       condition: << parameters.send_slack_on_recovery >>
       steps:
-        - send-slack-on-workflow-recovery
+        - send-slack-on-workflow-recovery:
+            channel: << parameters.channel >>
+            message: << parameters.message >>
+

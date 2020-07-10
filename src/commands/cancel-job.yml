@@ -9,6 +9,10 @@ parameters:
       - cancel
       - halt
     default: cancel
+  sleep_timeout:
+    description: The amount of time we want to wait for circleci to cancel the job
+    type: integer
+    default: 60
 steps:
   - run:
       name: Cancel the job
@@ -19,21 +23,23 @@ steps:
         set -e
 
         if [[ "<< parameters.method >>" == "cancel" ]]; then
+          CURL_URL="https://circleci.com/api/v1.1/project/github/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}/${CIRCLE_BUILD_NUM}/cancel"
+          echo ${CURL_URL}
           OUTPUT=$(
             curl \
               --user "${CIRCLE_API_USER_TOKEN}:" \
               -X POST \
               --max-time 60 \
               --connect-timeout 60 \
-              "https://circleci.com/api/v1.1/project/github/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}/${CIRCLE_BUILD_NUM}/cancel")
-          echo "$OUTPUT"
+              ${CURL_URL})
+          echo ${OUTPUT}
 
           STATUS="$(echo "$OUTPUT" | jq -r .status -)"
           if [[ "$STATUS" == 'canceled' ]]; then
             # This means the job was cancelled but for some reason the current script is
             # still running. Wait a few seconds to let it catch up then fail the job to
             # prevent downstream jobs from running unintentionally.
-            sleep 60
+            sleep << parameters.sleep_timeout >>
             exit 1
           fi
 

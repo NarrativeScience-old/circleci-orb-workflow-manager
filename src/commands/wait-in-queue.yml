@@ -65,7 +65,7 @@ steps:
         mkdir -p /tmp/workspace
         echo "$WORKFLOW_KEY" > /tmp/workspace/workflow-key.json
 
-        PREV_COMMIT="$(git rev-parse HEAD^)"
+        PREV_COMMIT="$(git rev-parse $CIRCLE_SHA1^)"
 
         # Create a temporary file containing the new item value (JSON)
         ITEM="$(mktemp)"
@@ -87,6 +87,7 @@ steps:
         aws dynamodb put-item \
           --table-name "$DYNAMODB_TABLE_WORKFLOWS" \
           --item "file://$ITEM"
+        echo "Added commit ($CIRCLE_SHA1) to the queue"
 
         # Query the table to find the workflow with the single oldest committed_at
         # timestamp and with a status of running or queued
@@ -99,8 +100,7 @@ steps:
             --key-condition-expression '#key = :key' \
             --filter-expression '#status IN (:running, :queued)' \
             --expression-attribute-names '{"#key": "key", "#status": "status"}' \
-            --expression-attribute-values "$values" \
-            --max-items 1
+            --expression-attribute-values "$values"
         }
 
         function workflowForCommitExists() {
@@ -114,8 +114,8 @@ steps:
               aws dynamodb query \
                 --table-name "$DYNAMODB_TABLE_WORKFLOWS" \
                 --index-name commit \
-                --key-condition-expression '#key = :key AND #commit = :commit' \
-                --expression-attribute-names '{"#key": "key", "#commit": "commit"}' \
+                --key-condition-expression '#commit = :commit' \
+                --expression-attribute-names '{"#commit": "commit"}' \
                 --expression-attribute-values "$values" \
                 --max-items 1)"
             local count="$(echo "$result" | jq -r .Count -)"
@@ -147,6 +147,7 @@ steps:
             # in the correct order.
             if [[ -n "$CHECK_PREVIOUS_COMMIT" ]]; then
               if ! workflowForCommitExists "$PREV_COMMIT"; then
+                echo "The previous commit: $PREV_COMMIT was not found! Will wait for $PREV_COMMIT to deploy"
                 exit 1
               fi
             fi
@@ -163,6 +164,34 @@ steps:
               exit 0
             else
               echo "This workflow ($CIRCLE_WORKFLOW_ID) is not at the front of the queue. Next up: $(echo "$result" | jq .Items[0] -)"
+              exit 1
+            fi
+          )
+        }
+
+        # Check if this workflow is at the end of the queue
+        function isWorkflowEndOfQueue() {
+          (
+            # Check to see if this commit is at the end of the queue or if another
+            # commit is pending that will deploy these changes.
+
+            local result="$(queryItems)"
+            if [[ $? -ne 0 ]]; then
+              echo "Failed to query for workflow items"
+              exit 1
+            fi
+
+            # Get the last workflow_id in the queue
+            local workflow_id="$(echo "$result" | jq -r .Items[-1].workflow_id.S -)"
+            local count="$(echo "$result" | jq -r .Count -)"
+            echo "There are $count items (including this one) currently in the queue"
+
+            if [[ "$workflow_id" == "$CIRCLE_WORKFLOW_ID" || "$count" == 0 ]]; then
+              echo "This workflow ($CIRCLE_WORKFLOW_ID) is the last in the queue."
+              exit 0
+            else
+              echo "This workflow ($CIRCLE_WORKFLOW_ID) is not at the end of the queue. Last Commit in the Queue is:"
+              echo "$(echo "$result" | jq .Items[-1] -)"
               exit 1
             fi
           )
@@ -191,6 +220,7 @@ steps:
         shopt -s nocasematch
         if [[ "$MESSAGE" == *'<< parameters.do_not_cancel_workflow_if_tag_in_commit >>'* ]]; then
           SKIP_COMMIT_ALLOWED=0
+          echo "Skip is disabled; Commit $CIRCLE_SHA1 will make $MAX_ATTEMPTS attempts to aquire the lock before failing"
         fi
         shopt -u nocasematch
         <</ parameters.do_not_cancel_workflow_if_tag_in_commit >>
@@ -223,18 +253,31 @@ steps:
             echo "Attempt: $n of $MAX_ATTEMPTS"
 
             if [[ "$SKIP_COMMIT_ALLOWED" == 1 ]]; then
-              if isCommitHeadOfBranch; then
-                echo "Commit $CIRCLE_SHA1 is still HEAD of the $CIRCLE_BRANCH branch"
+              # if this is not the last commit, then cancel
+              # and assume the next deploy will cover these changes
+              if isWorkflowEndOfQueue; then
+                echo "This commit ($CIRCLE_SHA1) is last in the queue; Waiting to aquire the deployment lock"
               else
                 echo 'export CANCEL_JOB=1' >> $BASH_ENV
                 echo 'export WORKFLOW_LOCK_BUILD_STATUS=CANCELLED' >> $BASH_ENV
-                echo "Commit $CIRCLE_SHA1 is no longer HEAD of the $CIRCLE_BRANCH branch and will be skipped"
+                echo "A newer commit has been added to the queue and is expected to deploy these changes"
+                echo " This commit ($CIRCLE_SHA1) is no longer last in the queue and will be squashed into the next commit"
                 exit 0
               fi
             fi
 
             if isWorkflowFrontOfQueue; then
               updateWorkflowStatus
+              echo "This commit ($CIRCLE_SHA1) has aquired the lock"
+              
+              # Check if this is the head of the branch just to notify the user
+              if isCommitHeadOfBranch; then
+                echo "$CIRCLE_SHA1 is the head of $CIRCLE_BRANCH"
+              else
+                echo "$CIRCLE_SHA1 is NOT the head of $CIRCLE_BRANCH."
+                echo "This is could be the case if squashing is disabled or your pipeline filters out some commits."
+              fi
+
               exit 0
             fi
 

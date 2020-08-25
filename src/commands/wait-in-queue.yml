@@ -114,8 +114,8 @@ steps:
               aws dynamodb query \
                 --table-name "$DYNAMODB_TABLE_WORKFLOWS" \
                 --index-name commit \
-                --key-condition-expression '#commit = :commit' \
-                --expression-attribute-names '{"#commit": "commit"}' \
+                --key-condition-expression '#key = :key AND #commit = :commit' \
+                --expression-attribute-names '{"#key": "key", "#commit": "commit"}' \
                 --expression-attribute-values "$values" \
                 --max-items 1)"
             local count="$(echo "$result" | jq -r .Count -)"

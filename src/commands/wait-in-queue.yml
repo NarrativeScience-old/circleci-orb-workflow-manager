@@ -276,7 +276,7 @@ steps:
                 echo "$CIRCLE_SHA1 is the head of $CIRCLE_BRANCH"
               else
                 echo "$CIRCLE_SHA1 is NOT the head of $CIRCLE_BRANCH."
-                echo "This is could be the case if squashing is disabled or your pipeline filters out some commits."
+                echo "This is okay and could be the case if squashing is disabled or your pipeline filters out some commits."
               fi
 
               exit 0

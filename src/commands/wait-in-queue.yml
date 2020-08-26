@@ -262,7 +262,7 @@ steps:
                 echo 'export CANCEL_JOB=1' >> $BASH_ENV
                 echo 'export WORKFLOW_LOCK_BUILD_STATUS=CANCELLED' >> $BASH_ENV
                 echo "A newer commit has been added to the queue and is expected to deploy these changes"
-                echo " This commit ($CIRCLE_SHA1) is no longer last in the queue and will be squashed into the next commit"
+                echo "This workflow ($CIRCLE_WORKFLOW_ID) will self-cancel and the commit ($CIRCLE_SHA1) will be squashed into the next"
                 exit 0
               fi
             fi

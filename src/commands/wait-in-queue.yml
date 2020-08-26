@@ -254,7 +254,7 @@ steps:
             echo "Attempt: $n of $MAX_ATTEMPTS"
 
             if [[ "$SKIP_COMMIT_ALLOWED" == 1 ]]; then
-              # if this is not the last commit, then cancel
+              # If this is not the last commit, then cancel
               # and assume the next deploy will cover these changes
               if isWorkflowEndOfQueue; then
                 echo "This commit ($CIRCLE_SHA1) is last in the queue; Waiting to aquire the deployment lock"

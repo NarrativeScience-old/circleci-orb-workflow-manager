@@ -269,7 +269,7 @@ steps:
 
             if isWorkflowFrontOfQueue; then
               updateWorkflowStatus
-              echo "This commit ($CIRCLE_SHA1) has aquired the lock"
+              echo "This commit ($CIRCLE_SHA1) has acquired the lock"
               
               # Check if this is the head of the branch just to notify the user
               if isCommitHeadOfBranch; then

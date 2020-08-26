@@ -257,7 +257,7 @@ steps:
               # If this is not the last commit, then cancel
               # and assume the next deploy will cover these changes
               if isWorkflowEndOfQueue; then
-                echo "This commit ($CIRCLE_SHA1) is last in the queue; Waiting to aquire the deployment lock"
+                echo "This commit ($CIRCLE_SHA1) is last in the queue; Waiting to acquire the lock"
               else
                 echo 'export CANCEL_JOB=1' >> $BASH_ENV
                 echo 'export WORKFLOW_LOCK_BUILD_STATUS=CANCELLED' >> $BASH_ENV

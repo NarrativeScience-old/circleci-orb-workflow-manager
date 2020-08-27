@@ -6,7 +6,7 @@ Manage workflow concurrency and job state using an external store.
 
 This orb allows you to:
 
-- Limit the number of concurrently running workflows. This is useful when you want to only deploy one batch of changes at a time or use AWS CloudFormation and need to wait for the previous deploy to finish.
+- Limit the number of concurrently running workflows. This is useful when you want to only allow one batch of changes at a time or use AWS CloudFormation and need to wait for the previous deploy to finish.
 - Squash commits that are deployed in a workflow when the workflow is allowed to proceed
 - Store and retreive data from a key-value store in jobs, even if they're run in parallel
 - Track the status of a workflow from the command line
@@ -98,7 +98,7 @@ username | string | GitHub username of commit author
 workflow_id | string | Workflow instance ID
 status | string | Localized secondary index. One of `QUEUED`, `RUNNING`, `SUCCESS`, `FAILED`. Starts out as `QUEUED`.
 
-The job then starts polling the table for the oldest item that doesn't have a status attribute of `SUCCESS` or `FAILED`. If that item has the same `workflow_id` as the job, that means the job is at the "front" of the queue and can continue; we set the item's status to `RUNNING` and the workflow transitions to the next job. It will wait in the queue for up to 4 hours before failing. When the workflow is allowed to continue, it can be said to have a "lock" on the deploy.
+The job then starts polling the table for the oldest item that doesn't have a status attribute of `SUCCESS` or `FAILED`. If that item has the same `workflow_id` as the job, that means the job is at the "front" of the queue and can continue; we set the item's status to `RUNNING` and the workflow transitions to the next job. It will wait in the queue for up to 4 hours before failing. When the workflow is allowed to continue, it can be said to have a "lock".
 
 ### Exiting the Queue: `exit-queue`
 

@@ -221,7 +221,7 @@ steps:
         if [[ "$MESSAGE" == *'<< parameters.do_not_cancel_workflow_if_tag_in_commit >>'* ]]; then
           SKIP_COMMIT_ALLOWED=0
           echo "Skip is disabled" 
-          echo "This Commit ($CIRCLE_SHA1) will not self-cancel and make $MAX_ATTEMPTS attempts to aquire the lock before failing"
+          echo "This Commit ($CIRCLE_SHA1) will not self-cancel and run until it acquires the lock or times out"
         fi
         shopt -u nocasematch
         <</ parameters.do_not_cancel_workflow_if_tag_in_commit >>
@@ -255,13 +255,13 @@ steps:
 
             if [[ "$SKIP_COMMIT_ALLOWED" == 1 ]]; then
               # if this is not the last commit, then cancel
-              # and assume the next deploy will cover these changes
+              # and assume the next commit has these changes sqaushed
               if isWorkflowEndOfQueue; then
-                echo "This commit ($CIRCLE_SHA1) is last in the queue; Waiting to aquire the deployment lock"
+                echo "This commit ($CIRCLE_SHA1) is last in the queue; Waiting to aquire the lock"
               else
                 echo 'export CANCEL_JOB=1' >> $BASH_ENV
                 echo 'export WORKFLOW_LOCK_BUILD_STATUS=CANCELLED' >> $BASH_ENV
-                echo "A newer commit has been added to the queue and is expected to deploy these changes"
+                echo "A newer commit has been added to the queue and is expected to contain these changes"
                 echo "This workflow ($CIRCLE_WORKFLOW_ID) will self-cancel and the commit ($CIRCLE_SHA1) will be squashed into the next"
                 exit 0
               fi

@@ -221,7 +221,7 @@ steps:
         if [[ "$MESSAGE" == *'<< parameters.do_not_cancel_workflow_if_tag_in_commit >>'* ]]; then
           SKIP_COMMIT_ALLOWED=0
           echo "Skip is disabled" 
-          echo "This Commit ($CIRCLE_SHA1) will not self-cancel and make $MAX_ATTEMPTS attempts to aquire the lock before failing"
+          echo "This Commit ($CIRCLE_SHA1) will not self-cancel and make at most $MAX_ATTEMPTS attempts to acquire the lock before failing"
         fi
         shopt -u nocasematch
         <</ parameters.do_not_cancel_workflow_if_tag_in_commit >>

@@ -221,7 +221,11 @@ steps:
         if [[ "$MESSAGE" == *'<< parameters.do_not_cancel_workflow_if_tag_in_commit >>'* ]]; then
           SKIP_COMMIT_ALLOWED=0
           echo "Skip is disabled" 
+<<<<<<< HEAD
           echo "This Commit ($CIRCLE_SHA1) will not self-cancel and run until it acquires the lock or times out"
+=======
+          echo "This Commit ($CIRCLE_SHA1) will not self-cancel and make at most $MAX_ATTEMPTS attempts to acquire the lock before failing"
+>>>>>>> 9e5d2998dd624640b926d7c23ca5d799cb040f95
         fi
         shopt -u nocasematch
         <</ parameters.do_not_cancel_workflow_if_tag_in_commit >>
@@ -254,10 +258,9 @@ steps:
             echo "Attempt: $n of $MAX_ATTEMPTS"
 
             if [[ "$SKIP_COMMIT_ALLOWED" == 1 ]]; then
-              # if this is not the last commit, then cancel
-              # and assume the next commit has these changes sqaushed
+              # If this is not the last commit, then cancel
               if isWorkflowEndOfQueue; then
-                echo "This commit ($CIRCLE_SHA1) is last in the queue; Waiting to aquire the lock"
+                echo "This commit ($CIRCLE_SHA1) is last in the queue; Waiting to acquire the lock"
               else
                 echo 'export CANCEL_JOB=1' >> $BASH_ENV
                 echo 'export WORKFLOW_LOCK_BUILD_STATUS=CANCELLED' >> $BASH_ENV
@@ -269,7 +272,7 @@ steps:
 
             if isWorkflowFrontOfQueue; then
               updateWorkflowStatus
-              echo "This commit ($CIRCLE_SHA1) has aquired the lock"
+              echo "This commit ($CIRCLE_SHA1) has acquired the lock"
               
               # Check if this is the head of the branch just to notify the user
               if isCommitHeadOfBranch; then

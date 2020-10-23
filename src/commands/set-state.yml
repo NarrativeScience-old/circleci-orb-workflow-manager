@@ -32,12 +32,9 @@ steps:
           > "$VALUES"
         cat "$VALUES"
 
-        # Set the AWS_PAGER var to be set as empty so if we are using AWSCLI V2 this command works
-        echo 'export AWS_PAGER=""' >> $BASH_ENV
-
         # Update the state item and return the updated item
         # The key object is stored in /tmp/workspace/workflow-key.json
-        aws dynamodb update-item \
+        AWS_PAGER="" aws dynamodb update-item \
           --table-name "$DYNAMODB_TABLE_WORKFLOWS" \
           --key "file:///tmp/workspace/workflow-key.json" \
           --update-expression 'SET #state.#key = :value' \

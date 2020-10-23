@@ -34,7 +34,7 @@ steps:
 
         # Update the state item and return the updated item
         # The key object is stored in /tmp/workspace/workflow-key.json
-        AWS_PAGER="" && aws dynamodb update-item \
+        AWS_PAGER="" aws dynamodb update-item \
           --table-name "$DYNAMODB_TABLE_WORKFLOWS" \
           --key "file:///tmp/workspace/workflow-key.json" \
           --update-expression 'SET #state.#key = :value' \

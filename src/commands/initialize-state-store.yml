@@ -18,7 +18,7 @@ steps:
 
         # Get the state item
         ITEM="$(
-          aws dynamodb get-item \
+          AWS_PAGER="" aws dynamodb get-item \
             --table-name "$DYNAMODB_TABLE_WORKFLOWS" \
             --key "file://${WORKFLOW_KEY_FILE}" \
             --consistent-read)"

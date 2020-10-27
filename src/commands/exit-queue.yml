@@ -63,7 +63,7 @@ steps:
           echo '{}' \
             | jq --arg s "$WORKFLOW_LOCK_BUILD_STATUS" '.[":status"].S = $s' - \
             | jq --arg t "$(date +%s)" '.[":released_at"].N = $t' -)"
-        aws dynamodb update-item \
+        AWS_PAGER="" aws dynamodb update-item \
           --table-name "$DYNAMODB_TABLE_WORKFLOWS" \
           --key "file:///tmp/workspace/workflow-key.json" \
           --update-expression 'SET #status = :status, #released_at = :released_at' \

@@ -19,7 +19,7 @@ steps:
         # of either `SUCCESS` or `FAILURE`. The most recent value should be the
         # status of the current workflow after it has exited the queue
         # and updated its status on the corresponding dynamodb table.
-        deploys="$(aws dynamodb query \
+        AWS_PAGER="" deploys="$(aws dynamodb query \
           --table-name "$DYNAMODB_TABLE_WORKFLOWS" \
           --key-condition-expression '#key = :key' \
           --select "SPECIFIC_ATTRIBUTES" \

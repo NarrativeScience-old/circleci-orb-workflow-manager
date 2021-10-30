@@ -136,6 +136,21 @@ steps:
         # Check if this workflow is at the front of the queue
         function isWorkflowFrontOfQueue() {
           (
+            # are there any items in this table that match our workflow lock key
+            local values="$(
+              echo '{}' \
+              | jq --arg k "$LOCK_KEY" '.[":key"].S = $k' - )"
+            count="$(aws dynamodb scan \
+              --table-name "$DYNAMODB_TABLE_WORKFLOWS" \
+              --filter-expression "#key = :key" \
+              --expression-attribute-names '{"#key": "key"}' \
+              --expression-attribute-values "$values" \
+              --select COUNT | jq .Count)"
+            if [[ $count -eq 0 ]]; then
+              echo "There were no commits found for this lock key: $LOCK_KEY"
+              exit 0
+            fi
+
             # Check that previous commit was processed. This means it has an item in
             # the workflows table.
             #

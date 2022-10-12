@@ -35,7 +35,8 @@ steps:
           echo ${OUTPUT}
 
           STATUS="$(echo "$OUTPUT" | jq -r .status -)"
-          if [[ "$STATUS" == 'canceled' ]]; then
+          # Make sure the job was acutally cancelled - if not wait.
+          if [[ "$STATUS" != 'canceled' ]]; then
             # This means the job was cancelled but for some reason the current script is
             # still running. Wait a few seconds to let it catch up then fail the job to
             # prevent downstream jobs from running unintentionally.
